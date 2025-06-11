@@ -45,12 +45,9 @@ async fn aq_sensor(
     let device = I2cDevice::new(bus);
     let mut sensor = Pmsa003i::new(device);
 
-    loop {
-        match sensor.read().await {
-            Ok(reading) => event_bus.send(Event::AqReadOk(reading)).await,
-            Err(_) => event_bus.send(Event::AqReadErr).await,
-        }
-        Timer::after_secs(3).await;
+    match sensor.read().await {
+        Ok(reading) => event_bus.send(Event::AqReadOk(reading)).await,
+        Err(_) => event_bus.send(Event::AqReadErr).await,
     }
 }
 
@@ -60,29 +57,28 @@ async fn logging(driver: Driver<'static, USB>) {
 }
 
 #[embassy_executor::task]
-async fn orchestration() {
+async fn event_handler() {
     loop {
         match EVENT_BUS.receive().await {
             Event::AqReadOk(data) => {
-                log::info!("aq sensor reading: {:?}", data);
+                log::info!("aq ok: {:?}", data);
                 // TODO LoRa tx
             }
             Event::AqReadErr => {
-                log::error!("aq sensor error");
+                log::error!("aq err");
             }
             Event::Nop => {}
         }
     }
 }
 
-#[embassy_executor::main]
-async fn main(spawner: Spawner) {
+#[embassy_executor::task]
+async fn orchestration(spawner: Spawner) {
     let board = Board::default();
     let usb_driver = Driver::new(board.usb, Irqs);
     spawner.must_spawn(logging(usb_driver));
 
-    spawner.must_spawn(orchestration());
-
+    // TODO create abstraction
     // defaults to 100 kbps, which is the only speed the AQ sensor works with
     let i2c = i2c::I2c::new_async(
         board.i2c.bus,
@@ -93,5 +89,15 @@ async fn main(spawner: Spawner) {
     );
     static I2C_BUS: StaticCell<I2c1Bus> = StaticCell::new();
     let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
-    spawner.must_spawn(aq_sensor(i2c_bus, EVENT_BUS.sender()));
+
+    loop {
+        spawner.must_spawn(aq_sensor(i2c_bus, EVENT_BUS.sender()));
+        Timer::after_secs(3).await;
+    }
+}
+
+#[embassy_executor::main]
+async fn main(spawner: Spawner) {
+    spawner.must_spawn(event_handler());
+    spawner.must_spawn(orchestration(spawner));
 }
