@@ -13,6 +13,7 @@ use embassy_rp::usb::Driver;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::{NoopRawMutex, ThreadModeRawMutex};
 use embassy_sync::channel::{Channel, Sender};
+use embassy_time::Timer;
 use panic_halt as _;
 use pmsa003i::{Pmsa003i, Reading};
 use static_cell::StaticCell;
@@ -20,17 +21,16 @@ use crate::board::Board;
 
 type I2c1Bus = Mutex<NoopRawMutex, I2c<'static, I2C1, Async>>;
 
-// need to wrap pmsa003i return value bc it uses generics and embassy async tasks cannot
-// TODO use something like PeriOpResult enum to abstract all sensor ops in a single place (for use on a single channel)?
-enum AQSensorResult {
-    Ok(Reading),
+pub enum Event {
     // TODO wrap as needed: github.com/bbustin/pmsa003i/blob/master/src/error.rs
-    Err
+    // need to wrap pmsa003i return value bc it uses generics and embassy async tasks cannot
+    AqReadErr,
+    AqReadOk(Reading),
+    Nop
 }
 
-const AQ_CHANNEL_BUFFER_SIZE: usize = 64;
-
-static CHANNEL: Channel<ThreadModeRawMutex, AQSensorResult, AQ_CHANNEL_BUFFER_SIZE> = Channel::new();
+const EVENT_BUS_BUFFER_SIZE: usize = 64;
+static EVENT_BUS: Channel<ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE> = Channel::new();
 
 bind_interrupts!(struct Irqs {
     I2C1_IRQ => i2c::InterruptHandler<I2C1>;
@@ -40,14 +40,17 @@ bind_interrupts!(struct Irqs {
 #[embassy_executor::task]
 async fn aq_sensor(
     bus: &'static I2c1Bus,
-    control: Sender<'static, ThreadModeRawMutex, AQSensorResult, AQ_CHANNEL_BUFFER_SIZE>
+    event_bus: Sender<'static, ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE>
 ) {
     let device = I2cDevice::new(bus);
     let mut sensor = Pmsa003i::new(device);
 
-    match sensor.read().await {
-        Ok(reading) => control.send(AQSensorResult::Ok(reading)).await,
-        Err(_) => control.send(AQSensorResult::Err).await,
+    loop {
+        match sensor.read().await {
+            Ok(reading) => event_bus.send(Event::AqReadOk(reading)).await,
+            Err(_) => event_bus.send(Event::AqReadErr).await,
+        }
+        Timer::after_secs(3).await;
     }
 }
 
@@ -56,11 +59,29 @@ async fn logging(driver: Driver<'static, USB>) {
     embassy_usb_logger::run!(1024, log::LevelFilter::Info, driver);
 }
 
+#[embassy_executor::task]
+async fn orchestration() {
+    loop {
+        match EVENT_BUS.receive().await {
+            Event::AqReadOk(data) => {
+                log::info!("aq sensor reading: {:?}", data);
+                // TODO LoRa tx
+            }
+            Event::AqReadErr => {
+                log::error!("aq sensor error");
+            }
+            Event::Nop => {}
+        }
+    }
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let board = Board::default();
     let usb_driver = Driver::new(board.usb, Irqs);
     spawner.must_spawn(logging(usb_driver));
+
+    spawner.must_spawn(orchestration());
 
     // defaults to 100 kbps, which is the only speed the AQ sensor works with
     let i2c = i2c::I2c::new_async(
@@ -72,17 +93,5 @@ async fn main(spawner: Spawner) {
     );
     static I2C_BUS: StaticCell<I2c1Bus> = StaticCell::new();
     let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
-    spawner.must_spawn(aq_sensor(i2c_bus, CHANNEL.sender()));
-
-    loop {
-        match CHANNEL.receive().await {
-            AQSensorResult::Ok(data) => {
-                log::info!("aq sensor reading: {:?}", data);
-                // TODO LoRa tx
-            }
-            AQSensorResult::Err => {
-                log::error!("aq sensor error");
-            }
-        }
-    }
+    spawner.must_spawn(aq_sensor(i2c_bus, EVENT_BUS.sender()));
 }
