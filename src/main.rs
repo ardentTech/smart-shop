@@ -2,6 +2,7 @@
 #![no_main]
 
 mod bsp;
+mod board;
 
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
@@ -15,7 +16,7 @@ use embassy_sync::channel::{Channel, Sender};
 use panic_halt as _;
 use pmsa003i::{Pmsa003i, Reading};
 use static_cell::StaticCell;
-use crate::bsp::{AssignedResources, DmaResources, GpioResources, I2cResources, LedResources, LoraResources, SpiResources, UartResources, UsbResources};
+use crate::board::Board;
 
 type I2c1Bus = Mutex<NoopRawMutex, I2c<'static, I2C1, Async>>;
 
@@ -57,10 +58,8 @@ async fn logging(driver: Driver<'static, USB>) {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let p = embassy_rp::init(Default::default());
-    let board = split_resources!(p);
-
-    let usb_driver = Driver::new(board.usb.usb, Irqs);
+    let board = Board::default();
+    let usb_driver = Driver::new(board.usb, Irqs);
     spawner.must_spawn(logging(usb_driver));
 
     // defaults to 100 kbps, which is the only speed the AQ sensor works with
