@@ -16,7 +16,8 @@ use embassy_rp::usb::Driver;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::{Channel, Sender};
-use embassy_time::Timer;
+use embassy_time::{Delay, Timer};
+use embedded_sht3x::{Sht3x, DEFAULT_I2C_ADDRESS};
 use panic_halt as _;
 use pmsa003i::{Pmsa003i, Reading};
 use static_cell::StaticCell;
@@ -25,11 +26,14 @@ use crate::radio::Radio;
 use crate::shared::{I2c1Bus, LoRaRadio, Spi1Bus};
 
 pub enum Event {
-    // TODO wrap as needed: github.com/bbustin/pmsa003i/blob/master/src/error.rs
+    // TODO wrap AQ Err and Reading as needed: github.com/bbustin/pmsa003i/blob/master/src/error.rs
     // need to wrap pmsa003i return value bc it uses generics and embassy async tasks cannot
     AqReadErr,
     AqReadOk(Reading),
-    Nop
+    Nop,
+    TempHumidityReadErr,
+    // TODO add data to temp humidity
+    TempHumidityReadOk
 }
 
 const EVENT_BUS_BUFFER_SIZE: usize = 64;
@@ -44,15 +48,18 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::task]
 async fn air_quality(
-    bus: &'static I2c1Bus,
+    i2c_bus: &'static I2c1Bus,
     event_bus: Sender<'static, ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE>
 ) {
-    let device = I2cDevice::new(bus);
-    let mut sensor = Pmsa003i::new(device);
+    let i2c_device = I2cDevice::new(i2c_bus);
+    let mut sensor = Pmsa003i::new(i2c_device);
 
     match sensor.read().await {
-        Ok(reading) => event_bus.send(Event::AqReadOk(reading)).await,
-        Err(_) => event_bus.send(Event::AqReadErr).await,
+        Ok(data) => event_bus.send(Event::AqReadOk(data)).await,
+        Err(e) => {
+            log::error!("{:?}", e);
+            event_bus.send(Event::AqReadErr).await
+        },
     }
 }
 
@@ -69,9 +76,19 @@ async fn event_handler(radio: &'static LoRaRadio) {
                 log::info!("lora tx ok")
             }
             Event::AqReadErr => {
-                log::error!("aq err");
+                // TODO lora tx?
             }
             Event::Nop => {}
+            Event::TempHumidityReadErr => {
+                // TODO lora tx?
+            }
+            Event::TempHumidityReadOk => {
+                let data = [1, 0, 1, 0, 1, 0];
+                let mut radio = radio.lock().await;
+                log::info!("temp humidity ok: {:?}", &data);
+                radio.tx(&data).await.unwrap();
+                log::info!("lora tx ok")
+            }
         }
     }
 }
@@ -79,6 +96,22 @@ async fn event_handler(radio: &'static LoRaRadio) {
 #[embassy_executor::task]
 async fn logger(driver: Driver<'static, USB>) {
     embassy_usb_logger::run!(1024, log::LevelFilter::Info, driver);
+}
+
+#[embassy_executor::task]
+async fn temp_humidity(
+    i2c_bus: &'static I2c1Bus,
+    event_bus: Sender<'static, ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE>
+) {
+    let i2c_device = I2cDevice::new(i2c_bus);
+    let mut sensor = Sht3x::new(i2c_device, DEFAULT_I2C_ADDRESS, Delay);
+    match sensor.single_measurement().await {
+        Ok(data) => event_bus.send(Event::TempHumidityReadOk).await,
+        Err(e) => {
+            log::error!("{:?}", e);
+            event_bus.send(Event::TempHumidityReadErr).await
+        },
+    }
 }
 
 #[embassy_executor::main]
@@ -102,7 +135,6 @@ async fn main(spawner: Spawner) {
     static RADIO: StaticCell<LoRaRadio> = StaticCell::new();
     let radio = RADIO.init(Mutex::new(Radio::new(spi_bus, board.lora.nss, board.lora.reset, board.lora.dio0).await));
 
-    // TODO configure LoRa and pass as arg to event_handler(...)
     spawner.must_spawn(event_handler(radio));
 
     // TODO handle this config in Board?
@@ -117,8 +149,11 @@ async fn main(spawner: Spawner) {
     static I2C_BUS: StaticCell<I2c1Bus> = StaticCell::new();
     let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
 
+    // TODO DHT peri
+
     loop {
         spawner.must_spawn(air_quality(i2c_bus, EVENT_BUS.sender()));
+        spawner.must_spawn(temp_humidity(i2c_bus, EVENT_BUS.sender()));
         Timer::after_secs(READ_INTERVAL_SECONDS).await;
     }
 }
