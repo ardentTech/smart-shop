@@ -9,6 +9,7 @@ mod shared;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
+use embassy_futures::join::join;
 use embassy_rp::i2c;
 use embassy_rp::peripherals::{I2C1, USB};
 use embassy_rp::spi::Spi;
@@ -46,19 +47,21 @@ bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => embassy_rp::usb::InterruptHandler<USB>;
 });
 
-#[embassy_executor::task]
 async fn air_quality(
     i2c_bus: &'static I2c1Bus,
-    event_bus: Sender<'static, ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE>
-) {
+) -> Result<(), ()> {
     let i2c_device = I2cDevice::new(i2c_bus);
     let mut sensor = Pmsa003i::new(i2c_device);
 
     match sensor.read().await {
-        Ok(data) => event_bus.send(Event::AqReadOk(data)).await,
+        Ok(data) => {
+            //event_bus.send(Event::AqReadOk(data)).await
+            Ok(())
+        },
         Err(e) => {
             log::error!("{:?}", e);
-            event_bus.send(Event::AqReadErr).await
+            //event_bus.send(Event::AqReadErr).await
+            Err(())
         },
     }
 }
@@ -99,17 +102,38 @@ async fn logger(driver: Driver<'static, USB>) {
 }
 
 #[embassy_executor::task]
-async fn temp_humidity(
+async fn sensors(
     i2c_bus: &'static I2c1Bus,
     event_bus: Sender<'static, ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE>
 ) {
+    match join(
+        air_quality(i2c_bus),
+        temp_humidity(i2c_bus)
+    ).await {
+        (Ok(_), Ok(_)) => {
+            log::info!("join succeeded :)");
+            // TODO send event here
+        },
+        _ => {
+            log::info!("join failed :(");
+        }
+    }
+}
+
+async fn temp_humidity(
+    i2c_bus: &'static I2c1Bus,
+) -> Result<(), ()>{
     let i2c_device = I2cDevice::new(i2c_bus);
     let mut sensor = Sht3x::new(i2c_device, DEFAULT_I2C_ADDRESS, Delay);
     match sensor.single_measurement().await {
-        Ok(data) => event_bus.send(Event::TempHumidityReadOk).await,
+        Ok(_data) => {
+            //event_bus.send(Event::TempHumidityReadOk).await
+            Ok(())
+        },
         Err(e) => {
             log::error!("{:?}", e);
-            event_bus.send(Event::TempHumidityReadErr).await
+            //event_bus.send(Event::TempHumidityReadErr).await
+            Err(())
         },
     }
 }
@@ -149,11 +173,8 @@ async fn main(spawner: Spawner) {
     static I2C_BUS: StaticCell<I2c1Bus> = StaticCell::new();
     let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
 
-    // TODO DHT peri
-
     loop {
-        spawner.must_spawn(air_quality(i2c_bus, EVENT_BUS.sender()));
-        spawner.must_spawn(temp_humidity(i2c_bus, EVENT_BUS.sender()));
+        spawner.must_spawn(sensors(i2c_bus, EVENT_BUS.sender()));
         Timer::after_secs(READ_INTERVAL_SECONDS).await;
     }
 }
