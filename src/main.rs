@@ -26,6 +26,29 @@ use crate::board::Board;
 use crate::radio::Radio;
 use crate::shared::{I2c1Bus, LoRaRadio, Spi1Bus};
 
+#[derive(Debug)]
+struct AirQualityReading {
+    aq_pm2_5: u16,
+    aq_pm10: u16,
+}
+impl AirQualityReading {
+    fn new(aq_pm2_5: u16, aq_pm10: u16) -> Self {
+        Self { aq_pm2_5, aq_pm10 }
+    }
+}
+
+#[derive(Debug)]
+struct TemperatureHumidityReading {
+    humidity: f32,
+    temperature: f32,
+}
+
+impl TemperatureHumidityReading {
+    fn new(humidity: f32, temperature: f32) -> Self {
+        Self { humidity, temperature }
+    }
+}
+
 pub enum Event {
     // TODO wrap AQ Err and Reading as needed: github.com/bbustin/pmsa003i/blob/master/src/error.rs
     // need to wrap pmsa003i return value bc it uses generics and embassy async tasks cannot
@@ -49,14 +72,14 @@ bind_interrupts!(struct Irqs {
 
 async fn air_quality(
     i2c_bus: &'static I2c1Bus,
-) -> Result<(), ()> {
+) -> Result<AirQualityReading, ()> {
     let i2c_device = I2cDevice::new(i2c_bus);
     let mut sensor = Pmsa003i::new(i2c_device);
 
     match sensor.read().await {
         Ok(data) => {
             //event_bus.send(Event::AqReadOk(data)).await
-            Ok(())
+            Ok(AirQualityReading::new(data.pm2_5, data.pm10))
         },
         Err(e) => {
             log::error!("{:?}", e);
@@ -102,7 +125,7 @@ async fn logger(driver: Driver<'static, USB>) {
 }
 
 #[embassy_executor::task]
-async fn sensors(
+async fn env_sensors(
     i2c_bus: &'static I2c1Bus,
     event_bus: Sender<'static, ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE>
 ) {
@@ -110,9 +133,13 @@ async fn sensors(
         air_quality(i2c_bus),
         temp_humidity(i2c_bus)
     ).await {
-        (Ok(_), Ok(_)) => {
+        (Ok(aq), Ok(th)) => {
             log::info!("join succeeded :)");
-            // TODO send event here
+            log::info!("aq: {:?}", aq);
+            log::info!("th: {:?}", th);
+            let mut bytes: [u8; 4] = aq.aq_pm10.to_le_bytes().iter().chain(&th).collect();
+            //let bytes: [u8; 4] = [aq.aq_pm2_5.to_le_bytes(), aq.aq_pm10.to_le_bytes()].concat();
+            // radio_tx(...).await
         },
         _ => {
             log::info!("join failed :(");
@@ -120,15 +147,20 @@ async fn sensors(
     }
 }
 
+async fn radio_tx(radio: &'static LoRaRadio, data: &[u8]) {
+    let mut radio = radio.lock().await;
+    radio.tx(data).await.unwrap();
+}
+
 async fn temp_humidity(
     i2c_bus: &'static I2c1Bus,
-) -> Result<(), ()>{
+) -> Result<TemperatureHumidityReading, ()> {
     let i2c_device = I2cDevice::new(i2c_bus);
     let mut sensor = Sht3x::new(i2c_device, DEFAULT_I2C_ADDRESS, Delay);
     match sensor.single_measurement().await {
-        Ok(_data) => {
+        Ok(data) => {
             //event_bus.send(Event::TempHumidityReadOk).await
-            Ok(())
+            Ok(TemperatureHumidityReading::new(data.relative_humidity, data.temperature.farenheit()))
         },
         Err(e) => {
             log::error!("{:?}", e);
@@ -174,7 +206,7 @@ async fn main(spawner: Spawner) {
     let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
 
     loop {
-        spawner.must_spawn(sensors(i2c_bus, EVENT_BUS.sender()));
+        spawner.must_spawn(env_sensors(i2c_bus, EVENT_BUS.sender()));
         Timer::after_secs(READ_INTERVAL_SECONDS).await;
     }
 }
