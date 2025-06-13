@@ -16,6 +16,7 @@ embassy-usb-logger = "0.4.0"
 embedded-sht3x = { git = "https://gitlab.com/ghislainmary/embedded-sht3x.git", rev = "19934103e53afa2dbc52acc03321346d172e198c", features = ["async"] }
 log = "0.4.27"
 lora-phy = "3.0.1"
+packed_struct = { version = "0.10.1", default-features = false }
 panic-halt = "1.0.0"
 pmsa003i = { version = "0.1.11", features = ["async"] }
 portable-atomic = { version = "1.11.0", features = ["critical-section"] }
