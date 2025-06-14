@@ -5,6 +5,7 @@ mod bsp;
 mod board;
 mod radio;
 mod shared;
+mod sht30;
 
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
@@ -15,8 +16,7 @@ use embassy_rp::peripherals::{I2C1, USB};
 use embassy_rp::spi::Spi;
 use embassy_rp::usb::Driver;
 use embassy_sync::mutex::Mutex;
-use embassy_time::{Delay, Timer};
-use embedded_sht3x::{Sht3x, DEFAULT_I2C_ADDRESS};
+use embassy_time::Timer;
 use packed_struct::prelude::*;
 use panic_halt as _;
 use pmsa003i::Pmsa003i;
@@ -24,6 +24,7 @@ use static_cell::StaticCell;
 use crate::board::Board;
 use crate::radio::Radio;
 use crate::shared::{I2c1Bus, LoRaRadio, Spi1Bus};
+use crate::sht30::Sht30;
 
 #[derive(Debug)]
 struct AirQualityReading {
@@ -38,12 +39,12 @@ impl AirQualityReading {
 
 #[derive(Debug)]
 struct TemperatureHumidityReading {
-    humidity: f32,
-    temperature: f32,
+    humidity: u16,
+    temperature: u16,
 }
 
 impl TemperatureHumidityReading {
-    fn new(humidity: f32, temperature: f32) -> Self {
+    fn new(humidity: u16, temperature: u16) -> Self {
         Self { humidity, temperature }
     }
 }
@@ -128,11 +129,12 @@ async fn temp_humidity(
     i2c_bus: &'static I2c1Bus,
 ) -> Result<TemperatureHumidityReading, ()> {
     let i2c_device = I2cDevice::new(i2c_bus);
-    let mut sensor = Sht3x::new(i2c_device, DEFAULT_I2C_ADDRESS, Delay);
-    match sensor.single_measurement().await {
+    //let mut sensor = Sht3x::new(i2c_device, DEFAULT_I2C_ADDRESS, Delay);
+    let mut sensor = Sht30::new(i2c_device);
+    match sensor.read().await {
         Ok(data) => {
             //event_bus.send(Event::TempHumidityReadOk).await
-            Ok(TemperatureHumidityReading::new(data.relative_humidity, data.temperature.farenheit()))
+            Ok(TemperatureHumidityReading::new(data.humidity, data.temperature))
         },
         Err(e) => {
             log::error!("{:?}", e);
