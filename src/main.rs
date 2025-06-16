@@ -49,7 +49,7 @@ impl TemperatureHumidityReading {
     }
 }
 
-#[derive(PackedStruct)]
+#[derive(PackedStruct, Debug)]
 #[packed_struct(endian="lsb")]
 struct ShopReading {
     #[packed_field()]
@@ -76,12 +76,10 @@ async fn air_quality(
 
     match sensor.read().await {
         Ok(data) => {
-            //event_bus.send(Event::AqReadOk(data)).await
             Ok(AirQualityReading::new(data.pm2_5, data.pm10))
         },
         Err(e) => {
-            log::error!("{:?}", e);
-            //event_bus.send(Event::AqReadErr).await
+            log::error!("air quality sensor read failed: {:?}", e);
             Err(())
         },
     }
@@ -95,7 +93,6 @@ async fn logger(driver: Driver<'static, USB>) {
 #[embassy_executor::task]
 async fn env_sensors(
     i2c_bus: &'static I2c1Bus,
-    //event_bus: Sender<'static, ThreadModeRawMutex, Event, EVENT_BUS_BUFFER_SIZE>,
     radio: &'static LoRaRadio,
 ) {
     match join(
@@ -106,17 +103,15 @@ async fn env_sensors(
             let reading = ShopReading {
                 aq_pm2_5: aq.aq_pm2_5.into(),
                 aq_pm10: aq.aq_pm10.into(),
-                humidity: (th.humidity as u16).into(),
-                temperature: (th.temperature as u16).into(),
+                humidity: th.humidity.into(),
+                temperature: th.temperature.into(),
             };
             let payload: [u8; 8] = reading.pack().unwrap();
             radio_tx(radio, &payload).await;
-            log::info!("radio tx succeeded with: {:?}", payload)
+            log::debug!("radio tx succeeded: {:?}", payload)
         },
-        _ => {
-            // TODO handle partial and total failures
-            log::info!("join failed :(");
-        }
+        // nop bc each sensor is responsible for logging its errors
+        _ => {}
     }
 }
 
@@ -129,16 +124,14 @@ async fn temp_humidity(
     i2c_bus: &'static I2c1Bus,
 ) -> Result<TemperatureHumidityReading, ()> {
     let i2c_device = I2cDevice::new(i2c_bus);
-    //let mut sensor = Sht3x::new(i2c_device, DEFAULT_I2C_ADDRESS, Delay);
     let mut sensor = Sht30::new(i2c_device);
+
     match sensor.read().await {
         Ok(data) => {
-            //event_bus.send(Event::TempHumidityReadOk).await
             Ok(TemperatureHumidityReading::new(data.humidity, data.temperature))
         },
         Err(e) => {
-            log::error!("{:?}", e);
-            //event_bus.send(Event::TempHumidityReadErr).await
+            log::error!("temp humidity sensor read failed: {:?}", e);
             Err(())
         },
     }

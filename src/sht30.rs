@@ -1,6 +1,9 @@
 use crc::{Crc, CRC_8_NRSC_5};
 use embedded_hal_async::i2c::{I2c, Operation, SevenBitAddress};
 
+// inspiration: https://gitlab.com/ghislainmary/embedded-sht3x
+// reasoning: i want a impl that is async-first and without default unit conversions
+
 pub const SHT30_ADDRESS: SevenBitAddress = 0x44;
 
 #[derive(Debug)]
@@ -44,6 +47,8 @@ impl<I2C: I2c> Sht30<I2C> {
         }
     }
 
+    // TODO check_status?
+
     #[inline]
     fn join_u16(data: &[u8; 2]) -> u16 {
         (data[0] as u16) << 8 | (data[1] as u16)
@@ -74,4 +79,9 @@ impl<I2C: I2c> Sht30<I2C> {
         let reading = Sht30Reading::new(humidity, temperature);
         Ok(reading)
     }
+}
+
+// TODO
+mod tests {
+    use super::*;
 }
