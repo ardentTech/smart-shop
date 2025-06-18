@@ -1,3 +1,5 @@
+#![no_std]
+
 use crc::{Crc, CRC_8_NRSC_5};
 use embedded_hal_async::i2c::{I2c, Operation, SevenBitAddress};
 
@@ -81,7 +83,11 @@ impl<I2C: I2c> Sht30<I2C> {
     }
 }
 
-// TODO
+#[cfg(test)]
 mod tests {
-    use super::*;
+
+    #[test]
+    fn it_works() {
+
+    }
 }

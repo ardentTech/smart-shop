@@ -5,7 +5,6 @@ mod bsp;
 mod board;
 mod radio;
 mod shared;
-mod sht30;
 
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
@@ -21,10 +20,10 @@ use packed_struct::prelude::*;
 use panic_halt as _;
 use pmsa003i::Pmsa003i;
 use static_cell::StaticCell;
+use sht30::Sht30;
 use crate::board::Board;
 use crate::radio::Radio;
 use crate::shared::{I2c1Bus, LoRaRadio, Spi1Bus};
-use crate::sht30::Sht30;
 
 #[derive(Debug)]
 struct AirQualityReading {

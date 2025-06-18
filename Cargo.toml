@@ -1,16 +1,16 @@
-[package]
-name = "adafruit_feather_rp2040_rfm95_quickstart"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = ["env_sensor", "sht30"]
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
 assign-resources = "0.4.1"
 cortex-m-rt = "0.7.5"
+crc = "3.3.0"
 embassy-embedded-hal = "0.3.0"
-embassy-executor = { version = "0.7.0", features = ["task-arena-size-98304", "arch-cortex-m", "executor-thread", "executor-interrupt"] }
+embassy-executor = "0.7.0"
 embedded-hal-async = "1.0.0"
 embassy-futures = "0.1.1"
-embassy-rp = { version = "0.4.0", features = ["unstable-pac", "time-driver", "critical-section-impl", "rp2040"] }
+embassy-rp = "0.4.0"
 embassy-sync = "0.6.2"
 embassy-time = "0.4.0"
 embassy-usb-logger = "0.4.0"
@@ -18,10 +18,10 @@ log = "0.4.27"
 lora-phy = "3.0.1"
 packed_struct = { version = "0.10.1", default-features = false }
 panic-halt = "1.0.0"
-pmsa003i = { version = "0.1.11", features = ["async"] }
-portable-atomic = { version = "1.11.0", features = ["critical-section"] }
+pmsa003i = "0.1.11"
+portable-atomic = "1.11.0"
+sht30 = { path = "sht30" }
 static_cell = "2.1.0"
-crc = "3.3.0"
 
 [profile.release]
 debug = 2

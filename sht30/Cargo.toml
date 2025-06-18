@@ -1,0 +1,8 @@
+[package]
+name = "sht30"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crc = { workspace = true }
+embedded-hal-async = { workspace = true }
