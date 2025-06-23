@@ -1,5 +1,5 @@
 [workspace]
-members = ["env_sensor", "sht30"]
+members = ["env_sensor", "lora", "sht30"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -15,7 +15,7 @@ embassy-sync = "0.6.2"
 embassy-time = "0.4.0"
 embassy-usb-logger = "0.4.0"
 log = "0.4.27"
-lora-phy = "3.0.1"
+lora = { path = "lora" }
 packed_struct = { version = "0.10.1", default-features = false }
 panic-halt = "1.0.0"
 pmsa003i = "0.1.11"

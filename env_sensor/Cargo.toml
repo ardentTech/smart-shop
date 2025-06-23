@@ -12,8 +12,8 @@ embassy-rp = { workspace = true, features = ["unstable-pac", "time-driver", "cri
 embassy-sync = { workspace = true }
 embassy-time = { workspace = true }
 embassy-usb-logger = { workspace = true }
+lora = { workspace = true }
 log = { workspace = true }
-lora-phy = { workspace = true }
 packed_struct = { workspace = true, default-features = false }
 panic-halt = { workspace = true }
 pmsa003i = { workspace = true, features = ["async"] }

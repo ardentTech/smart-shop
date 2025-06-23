@@ -1,14 +1,16 @@
+#![no_std]
+
 use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice;
 use embassy_rp::gpio::{Input, Output};
 use embassy_rp::peripherals::SPI1;
 use embassy_rp::spi::{Async, Spi};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::mutex::Mutex;
 use embassy_time::Delay;
 use lora_phy::{sx127x, LoRa};
 use lora_phy::iv::GenericSx127xInterfaceVariant;
 use lora_phy::mod_params::{Bandwidth, CodingRate, RadioError, SpreadingFactor};
 use lora_phy::sx127x::{Sx1276, Sx127x};
-use crate::shared::Spi1Bus;
 
 const LORA_FREQUENCY: u32 = 915_000_000;
 const PREAMBLE_LENGTH: u16 = 4;
@@ -25,8 +27,8 @@ pub struct Radio {
 }
 
 impl Radio {
-    pub(crate) async fn new(
-        spi_bus: &'static Spi1Bus,
+    pub async fn new(
+        spi_bus: &'static Mutex<NoopRawMutex, Spi<'static, SPI1, Async>>,
         chip_select: Output<'static>,
         reset: Output<'static>,
         dio0: Input<'static>
@@ -49,5 +51,14 @@ impl Radio {
         let mut packet_params = self.lora.create_tx_packet_params(PREAMBLE_LENGTH, IMPLICIT_HEADER, CRC_ON, IQ_INVERTED, &mod_params).unwrap();
         self.lora.prepare_for_tx(&mod_params, &mut packet_params, OUTPUT_POWER, buffer).await?;
         self.lora.tx().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn it_works() {
+        assert!(true);
     }
 }

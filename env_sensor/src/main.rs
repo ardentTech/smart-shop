@@ -3,27 +3,30 @@
 
 mod bsp;
 mod board;
-mod radio;
-mod shared;
 
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_futures::join::join;
 use embassy_rp::i2c;
-use embassy_rp::peripherals::{I2C1, USB};
+use embassy_rp::i2c::{Async, I2c};
+use embassy_rp::peripherals::{I2C1, SPI1, USB};
 use embassy_rp::spi::Spi;
 use embassy_rp::usb::Driver;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
 use packed_struct::prelude::*;
 use panic_halt as _;
 use pmsa003i::Pmsa003i;
 use static_cell::StaticCell;
+use lora::Radio;
 use sht30::Sht30;
 use crate::board::Board;
-use crate::radio::Radio;
-use crate::shared::{I2c1Bus, LoRaRadio, Spi1Bus};
+
+pub type I2c1Bus = Mutex<NoopRawMutex, I2c<'static, I2C1, Async>>;
+pub type LoRaRadio = Mutex<NoopRawMutex, Radio>;
+pub type Spi1Bus = Mutex<NoopRawMutex, Spi<'static, SPI1, embassy_rp::spi::Async>>;
 
 #[derive(Debug)]
 struct AirQualityReading {
