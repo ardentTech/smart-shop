@@ -1,7 +1,7 @@
 #![no_std]
 
 use crc::{Crc, CRC_8_NRSC_5};
-use embedded_hal_async::i2c::{I2c, Operation, SevenBitAddress};
+use embedded_hal_async::i2c::{I2c, SevenBitAddress};
 
 // inspiration: https://gitlab.com/ghislainmary/embedded-sht3x
 // reasoning: i want a impl that is async-first and without default unit conversions
@@ -67,8 +67,7 @@ impl<I2C: I2c> Sht30<I2C> {
     /// repeatability and the supply voltage of the sensor.
     pub async fn read(&mut self) -> Result<Sht30Reading, Sht30Error<I2C::Error>> {
         let mut data = [0u8; 6];
-        let mut operations = [Operation::Write(&READ_CMD), Operation::Read(&mut data)];
-        self.i2c.transaction(SHT30_ADDRESS, &mut operations).await.map_err(Sht30Error::I2C)?;
+        self.i2c.write_read(SHT30_ADDRESS, &READ_CMD, &mut data).await.map_err(Sht30Error::I2C)?;
 
         let temperature: &[u8; 2] = &data[0..2].try_into().unwrap();
         let temperature_crc = data[2];
@@ -91,28 +90,21 @@ mod tests {
     use embedded_hal_mock::eh1::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
 
     #[tokio::test]
-    #[should_panic]
     async fn read_i2c_error() {
         let expectations = [
-            I2cTransaction::transaction_start(SHT30_ADDRESS),
-            I2cTransaction::write(SHT30_ADDRESS, READ_CMD.to_vec()),
-            // embedded-hal-mock .with_error unwraps(), hence the should_panic macro above instead of asserting the returned error type. maybe i missed something.
-            I2cTransaction::read(SHT30_ADDRESS, [2u8, 4u8, 156u8, 8u8, 16u8, 245u8].to_vec()).with_error(ErrorKind::Other),
-            I2cTransaction::transaction_end(SHT30_ADDRESS),
+            I2cTransaction::write_read(SHT30_ADDRESS, READ_CMD.to_vec(), [2u8, 4u8, 156u8, 8u8, 16u8, 245u8].to_vec()).with_error(ErrorKind::Other)
         ];
         let mut i2c = I2cMock::new(&expectations);
         let mut sht30 = Sht30::new(&mut i2c);
-        let _ = sht30.read().await;
+        let err = sht30.read().await.unwrap_err();
+        assert_eq!(err, Sht30Error::I2C(ErrorKind::Other));
         i2c.done();
     }
 
     #[tokio::test]
     async fn read_invalid_crc_error() {
         let expectations = [
-            I2cTransaction::transaction_start(SHT30_ADDRESS),
-            I2cTransaction::write(SHT30_ADDRESS, READ_CMD.to_vec()),
-            I2cTransaction::read(SHT30_ADDRESS, [0u8; 6].to_vec()),
-            I2cTransaction::transaction_end(SHT30_ADDRESS),
+            I2cTransaction::write_read(SHT30_ADDRESS, READ_CMD.to_vec(), [0u8; 6].to_vec())
         ];
         let mut i2c = I2cMock::new(&expectations);
         let mut sht30 = Sht30::new(&mut i2c);

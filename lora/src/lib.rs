@@ -46,9 +46,8 @@ impl Radio {
     }
 
     pub async fn tx(&mut self, buffer: &[u8]) -> Result<(), RadioError> {
-        // TODO can mod and packet params be instantiated ONCE inside `new`?
-        let mod_params = self.lora.create_modulation_params(SPREADING_FACTOR, BANDWIDTH, CODING_RATE, LORA_FREQUENCY).unwrap();
-        let mut packet_params = self.lora.create_tx_packet_params(PREAMBLE_LENGTH, IMPLICIT_HEADER, CRC_ON, IQ_INVERTED, &mod_params).unwrap();
+        let mod_params = self.lora.create_modulation_params(SPREADING_FACTOR, BANDWIDTH, CODING_RATE, LORA_FREQUENCY)?;
+        let mut packet_params = self.lora.create_tx_packet_params(PREAMBLE_LENGTH, IMPLICIT_HEADER, CRC_ON, IQ_INVERTED, &mod_params)?;
         self.lora.prepare_for_tx(&mod_params, &mut packet_params, OUTPUT_POWER, buffer).await?;
         self.lora.tx().await
     }
@@ -56,9 +55,16 @@ impl Radio {
 
 #[cfg(test)]
 mod tests {
+    use crate::*;
+    use embedded_hal_mock::eh1::spi::{Mock as SpiMock, Transaction as SpiTransaction};
 
     #[test]
-    fn it_works() {
+    fn tx_err() {
+        assert!(true);
+    }
+
+    #[test]
+    fn tx_ok() {
         assert!(true);
     }
 }

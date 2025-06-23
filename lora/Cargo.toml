@@ -9,3 +9,7 @@ embassy-rp = { workspace = true, features = ["rp2040"] }
 embassy-sync = { workspace = true }
 embassy-time = { workspace = true }
 lora-phy = "3.0.1"
+
+[dev-dependencies]
+embedded-hal-mock = { version = "0.11.1", features = ["eh1", "embedded-hal-async"] }
+tokio = { version = "1.45.1", features = ["rt", "macros"] }
