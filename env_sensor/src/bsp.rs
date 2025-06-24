@@ -29,7 +29,7 @@
 //         led: PIN_13,
 //         neo_pixel: PIN_4,
 //     }
-//     lora: LoraResources {
+//     lora_radio: LoraResources {
 //         cs: PIN_16,
 //         reset: PIN_17,
 //         io0: PIN_21,

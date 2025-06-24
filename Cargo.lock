@@ -938,9 +938,7 @@ dependencies = [
  "embassy-rp",
  "embassy-sync",
  "embassy-time",
- "embedded-hal-mock",
  "lora-phy",
- "tokio",
 ]
 
 [[package]]

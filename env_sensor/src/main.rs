@@ -20,12 +20,12 @@ use packed_struct::prelude::*;
 use panic_halt as _;
 use pmsa003i::Pmsa003i;
 use static_cell::StaticCell;
-use lora::Radio;
+use lora::LoraRadio;
 use sht30::Sht30;
 use crate::board::Board;
 
 pub type I2c1Bus = Mutex<NoopRawMutex, I2c<'static, I2C1, Async>>;
-pub type LoRaRadio = Mutex<NoopRawMutex, Radio>;
+pub type LoRaRadio = Mutex<NoopRawMutex, LoraRadio>;
 pub type Spi1Bus = Mutex<NoopRawMutex, Spi<'static, SPI1, embassy_rp::spi::Async>>;
 
 #[derive(Debug)]
@@ -159,7 +159,7 @@ async fn main(spawner: Spawner) {
     let spi_bus = SPI_BUS.init(Mutex::new(spi));
 
     static RADIO: StaticCell<LoRaRadio> = StaticCell::new();
-    let radio = RADIO.init(Mutex::new(Radio::new(spi_bus, board.lora.nss, board.lora.reset, board.lora.dio0).await));
+    let radio = RADIO.init(Mutex::new(LoraRadio::new(spi_bus, board.lora.nss, board.lora.reset, board.lora.dio0).await));
 
     // TODO handle this config in Board?
     // defaults to 100 kbps, which is the only speed the AQ sensor works with
