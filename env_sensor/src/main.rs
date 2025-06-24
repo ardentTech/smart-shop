@@ -18,26 +18,15 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
 use packed_struct::prelude::*;
 use panic_halt as _;
-use pmsa003i::Pmsa003i;
 use static_cell::StaticCell;
-use lora::LoraRadio;
+use air_quality::{AQSensor, AirQualityReading};
+use lora_radio::LoraRadio;
 use sht30::Sht30;
 use crate::board::Board;
 
 pub type I2c1Bus = Mutex<NoopRawMutex, I2c<'static, I2C1, Async>>;
 pub type LoRaRadio = Mutex<NoopRawMutex, LoraRadio>;
 pub type Spi1Bus = Mutex<NoopRawMutex, Spi<'static, SPI1, embassy_rp::spi::Async>>;
-
-#[derive(Debug)]
-struct AirQualityReading {
-    aq_pm2_5: u16,
-    aq_pm10: u16,
-}
-impl AirQualityReading {
-    fn new(aq_pm2_5: u16, aq_pm10: u16) -> Self {
-        Self { aq_pm2_5, aq_pm10 }
-    }
-}
 
 #[derive(Debug)]
 struct TemperatureHumidityReading {
@@ -74,17 +63,8 @@ async fn air_quality(
     i2c_bus: &'static I2c1Bus,
 ) -> Result<AirQualityReading, ()> {
     let i2c_device = I2cDevice::new(i2c_bus);
-    let mut sensor = Pmsa003i::new(i2c_device);
-
-    match sensor.read().await {
-        Ok(data) => {
-            Ok(AirQualityReading::new(data.pm2_5, data.pm10))
-        },
-        Err(e) => {
-            log::error!("air quality sensor read failed: {:?}", e);
-            Err(())
-        },
-    }
+    let mut sensor = AQSensor::new(i2c_device);
+    sensor.read().await
 }
 
 #[embassy_executor::task]
@@ -103,8 +83,8 @@ async fn env_sensors(
     ).await {
         (Ok(aq), Ok(th)) => {
             let reading = ShopReading {
-                aq_pm2_5: aq.aq_pm2_5.into(),
-                aq_pm10: aq.aq_pm10.into(),
+                aq_pm2_5: aq.pm2_5.into(),
+                aq_pm10: aq.pm10.into(),
                 humidity: th.humidity.into(),
                 temperature: th.temperature.into(),
             };

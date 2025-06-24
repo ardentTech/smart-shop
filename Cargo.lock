@@ -39,6 +39,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "air_quality"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal-async",
+ "pmsa003i",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -683,6 +691,7 @@ checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 name = "env_sensor"
 version = "0.1.0"
 dependencies = [
+ "air_quality",
  "cortex-m-rt",
  "embassy-embedded-hal",
  "embassy-executor",
@@ -692,10 +701,9 @@ dependencies = [
  "embassy-time",
  "embassy-usb-logger",
  "log",
- "lora",
+ "lora_radio",
  "packed_struct",
  "panic-halt",
- "pmsa003i",
  "portable-atomic",
  "sht30",
  "static_cell",
@@ -931,17 +939,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
-name = "lora"
-version = "0.1.0"
-dependencies = [
- "embassy-embedded-hal",
- "embassy-rp",
- "embassy-sync",
- "embassy-time",
- "lora-phy",
-]
-
-[[package]]
 name = "lora-modulation"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -958,6 +955,17 @@ dependencies = [
  "embedded-hal-async",
  "lora-modulation",
  "num-traits",
+]
+
+[[package]]
+name = "lora_radio"
+version = "0.1.0"
+dependencies = [
+ "embassy-embedded-hal",
+ "embassy-rp",
+ "embassy-sync",
+ "embassy-time",
+ "lora-phy",
 ]
 
 [[package]]

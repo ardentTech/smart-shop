@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+air_quality = { workspace = true }
 cortex-m-rt = { workspace = true }
 embassy-embedded-hal = { workspace = true }
 embassy-executor = { workspace = true, features = ["task-arena-size-98304", "arch-cortex-m", "executor-thread", "executor-interrupt"] }
@@ -12,11 +13,10 @@ embassy-rp = { workspace = true, features = ["unstable-pac", "time-driver", "cri
 embassy-sync = { workspace = true }
 embassy-time = { workspace = true }
 embassy-usb-logger = { workspace = true }
-lora = { workspace = true }
+lora_radio = { workspace = true }
 log = { workspace = true }
 packed_struct = { workspace = true, default-features = false }
 panic-halt = { workspace = true }
-pmsa003i = { workspace = true, features = ["async"] }
 portable-atomic = { workspace = true, features = ["critical-section"] }
 sht30 = { workspace = true }
 static_cell = { workspace = true }

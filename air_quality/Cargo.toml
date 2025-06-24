@@ -1,0 +1,8 @@
+[package]
+name = "air_quality"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+embedded-hal-async = { workspace = true }
+pmsa003i = { version = "0.1.11", features = ["async"] }
