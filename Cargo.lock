@@ -43,7 +43,9 @@ name = "air_quality"
 version = "0.1.0"
 dependencies = [
  "embedded-hal-async",
+ "embedded-hal-mock",
  "pmsa003i",
+ "tokio",
 ]
 
 [[package]]
