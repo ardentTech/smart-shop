@@ -1,15 +1,15 @@
 #![no_std]
 #![no_main]
 
-mod bsp;
 mod board;
 
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
+use embassy_embedded_hal::shared_bus::I2cDeviceError;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_futures::join::join;
 use embassy_rp::i2c;
-use embassy_rp::i2c::{Async, I2c};
+use embassy_rp::i2c::{Async, Error, I2c};
 use embassy_rp::peripherals::{I2C1, SPI1, USB};
 use embassy_rp::spi::Spi;
 use embassy_rp::usb::Driver;
@@ -19,26 +19,14 @@ use embassy_time::Timer;
 use packed_struct::prelude::*;
 use panic_halt as _;
 use static_cell::StaticCell;
-use air_quality::{AQSensor, AirQualityReading};
+use air_quality::{AQSensor, AirQualityError, AirQualityReading};
 use lora_radio::LoraRadio;
-use sht30::Sht30;
+use sht30::{Sht30, Sht30Error, Sht30Reading};
 use crate::board::Board;
 
 pub type I2c1Bus = Mutex<NoopRawMutex, I2c<'static, I2C1, Async>>;
 pub type LoRaRadio = Mutex<NoopRawMutex, LoraRadio>;
 pub type Spi1Bus = Mutex<NoopRawMutex, Spi<'static, SPI1, embassy_rp::spi::Async>>;
-
-#[derive(Debug)]
-struct TemperatureHumidityReading {
-    humidity: u16,
-    temperature: u16,
-}
-
-impl TemperatureHumidityReading {
-    fn new(humidity: u16, temperature: u16) -> Self {
-        Self { humidity, temperature }
-    }
-}
 
 #[derive(PackedStruct, Debug)]
 #[packed_struct(endian="lsb")]
@@ -61,7 +49,7 @@ bind_interrupts!(struct Irqs {
 
 async fn air_quality(
     i2c_bus: &'static I2c1Bus,
-) -> Result<AirQualityReading, ()> {
+) -> Result<AirQualityReading, AirQualityError<I2cDeviceError<Error>>> {
     let i2c_device = I2cDevice::new(i2c_bus);
     let mut sensor = AQSensor::new(i2c_device);
     sensor.read().await
@@ -97,6 +85,7 @@ async fn env_sensors(
     }
 }
 
+// TODO should this return a result as well?
 async fn radio_tx(radio: &'static LoRaRadio, data: &[u8]) {
     let mut radio = radio.lock().await;
     radio.tx(data).await.unwrap();
@@ -104,19 +93,10 @@ async fn radio_tx(radio: &'static LoRaRadio, data: &[u8]) {
 
 async fn temp_humidity(
     i2c_bus: &'static I2c1Bus,
-) -> Result<TemperatureHumidityReading, ()> {
+) -> Result<Sht30Reading, Sht30Error<I2cDeviceError<Error>>> {
     let i2c_device = I2cDevice::new(i2c_bus);
     let mut sensor = Sht30::new(i2c_device);
-
-    match sensor.read().await {
-        Ok(data) => {
-            Ok(TemperatureHumidityReading::new(data.humidity, data.temperature))
-        },
-        Err(e) => {
-            log::error!("temp humidity sensor read failed: {:?}", e);
-            Err(())
-        },
-    }
+    sensor.read().await
 }
 
 #[embassy_executor::main]
