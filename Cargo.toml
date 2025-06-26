@@ -1,12 +1,12 @@
 [workspace]
-members = ["air_quality","env_sensor", "lora_radio", "sht30"]
+members = ["air_quality", "display","env_sensor", "lora_radio", "sht30"]
 resolver = "2"
 
 [workspace.dependencies]
 air_quality = { path = "air_quality" }
-assign-resources = "0.4.1"
 cortex-m-rt = "0.7.5"
 crc = "3.3.0"
+display = { path = "display" }
 embassy-embedded-hal = "0.3.0"
 embassy-executor = "0.7.0"
 embedded-hal-async = "1.0.0"

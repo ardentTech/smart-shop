@@ -1,0 +1,11 @@
+[package]
+name = "display"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+display-interface = "0.5.0"
+display-interface-i2c = "0.5.0"
+embedded-graphics = "0.8.1"
+embedded-hal-async = { workspace = true }
+oled_async = { git = "https://github.com/cschuhen/oled_drivers.git", rev = "fcc8291a6a6d0b050ec3cc7ed5730d5a466afcaa" }

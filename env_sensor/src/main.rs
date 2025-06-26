@@ -8,18 +8,22 @@ use embassy_embedded_hal::shared_bus::I2cDeviceError;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_futures::join::join;
+use embassy_futures::select::{select, Either};
+use embassy_rp::gpio::{Input, Pull};
 use embassy_rp::i2c;
 use embassy_rp::i2c::{Async, Error, I2c};
 use embassy_rp::peripherals::{I2C1, SPI1, USB};
 use embassy_rp::spi::Spi;
 use embassy_rp::usb::Driver;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex};
+use embassy_sync::channel::{Channel, Receiver, Sender};
 use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
 use packed_struct::prelude::*;
 use panic_halt as _;
 use static_cell::StaticCell;
 use air_quality::{AQSensor, AirQualityError, AirQualityReading};
+use display::Display;
 use lora_radio::LoraRadio;
 use sht30::{Sht30, Sht30Error, Sht30Reading};
 use crate::board::Board;
@@ -27,6 +31,12 @@ use crate::board::Board;
 pub type I2c1Bus = Mutex<NoopRawMutex, I2c<'static, I2C1, Async>>;
 pub type LoRaRadio = Mutex<NoopRawMutex, LoraRadio>;
 pub type Spi1Bus = Mutex<NoopRawMutex, Spi<'static, SPI1, embassy_rp::spi::Async>>;
+
+enum Event {
+    DisplayActivated,
+    DisplayDeactivated,
+}
+static CHANNEL: Channel<CriticalSectionRawMutex, Event, 64> = Channel::new();
 
 #[derive(PackedStruct, Debug)]
 #[packed_struct(endian="lsb")]
@@ -53,6 +63,40 @@ async fn air_quality(
     let i2c_device = I2cDevice::new(i2c_bus);
     let mut sensor = AQSensor::new(i2c_device);
     sensor.read().await
+}
+
+#[embassy_executor::task]
+async fn display(
+    control: Receiver<'static, CriticalSectionRawMutex, Event, 64>,
+    i2c_bus: &'static I2c1Bus,
+) {
+    let i2c_device = I2cDevice::new(i2c_bus);
+    let mut oled = Display::new(i2c_device).await;
+
+    loop {
+        match control.receive().await {
+            Event::DisplayActivated => {
+                oled.draw("howdy!").await
+            }
+            Event::DisplayDeactivated => {
+                oled.clear().await
+            }
+        }
+    }
+}
+
+#[embassy_executor::task]
+async fn display_controls(
+    mut btn_a: Input<'static>,
+    mut btn_c: Input<'static>,
+    control: Sender<'static, CriticalSectionRawMutex, Event, 64>
+) {
+    loop {
+        match select(btn_a.wait_for_falling_edge(), btn_c.wait_for_falling_edge()).await {
+            Either::First(_) => control.send(Event::DisplayActivated).await,
+            Either::Second(_) => control.send(Event::DisplayDeactivated).await
+        }
+    }
 }
 
 #[embassy_executor::task]
@@ -132,6 +176,11 @@ async fn main(spawner: Spawner) {
     );
     static I2C_BUS: StaticCell<I2c1Bus> = StaticCell::new();
     let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
+
+    let btn_a = Input::new(board.gpio.p9, Pull::Up);
+    let btn_c = Input::new(board.gpio.p5, Pull::Up);
+    spawner.must_spawn(display_controls(btn_a, btn_c, CHANNEL.sender()));
+    spawner.must_spawn(display(CHANNEL.receiver(), i2c_bus));
 
     loop {
         spawner.must_spawn(env_sensors(i2c_bus, radio));

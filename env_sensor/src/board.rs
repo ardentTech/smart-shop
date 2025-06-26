@@ -8,6 +8,11 @@ pub struct DMA {
     pub ch1: peripherals::DMA_CH1,
 }
 
+pub struct GPIO {
+    pub p5: peripherals::PIN_5,
+    pub p9: peripherals::PIN_9
+}
+
 pub struct I2C {
     pub bus: peripherals::I2C1,
     pub scl: peripherals::PIN_3,
@@ -29,6 +34,7 @@ pub struct SPI {
 
 pub struct Board {
     pub dma: DMA,
+    pub gpio: GPIO,
     pub i2c: I2C,
     pub lora: LoRa<'static>,
     pub spi: SPI,
@@ -42,6 +48,10 @@ impl Default for Board {
             dma: DMA {
                 ch0: peri.DMA_CH0,
                 ch1: peri.DMA_CH1,
+            },
+            gpio: GPIO {
+                p5: peri.PIN_5,
+                p9: peri.PIN_9,
             },
             // TODO just configure I2C1 device here?
             i2c: I2C {

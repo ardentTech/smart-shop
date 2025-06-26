@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 air_quality = { workspace = true }
 cortex-m-rt = { workspace = true }
+display = { workspace = true }
 embassy-embedded-hal = { workspace = true }
 embassy-executor = { workspace = true, features = ["task-arena-size-98304", "arch-cortex-m", "executor-thread", "executor-interrupt"] }
 embassy-futures = { workspace = true }
