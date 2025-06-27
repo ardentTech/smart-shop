@@ -3,6 +3,7 @@
 
 mod board;
 
+use core::fmt::Write;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_embedded_hal::shared_bus::I2cDeviceError;
 use embassy_executor::Spawner;
@@ -18,7 +19,9 @@ use embassy_rp::usb::Driver;
 use embassy_sync::blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex};
 use embassy_sync::channel::{Channel, Receiver, Sender};
 use embassy_sync::mutex::Mutex;
+use embassy_sync::signal::Signal;
 use embassy_time::Timer;
+use heapless::String;
 use packed_struct::prelude::*;
 use panic_halt as _;
 use static_cell::StaticCell;
@@ -38,9 +41,11 @@ enum Event {
 }
 static CHANNEL: Channel<CriticalSectionRawMutex, Event, 64> = Channel::new();
 
-#[derive(PackedStruct, Debug)]
+static LAST_ENV_READING: Signal<CriticalSectionRawMutex, EnvReading> = Signal::new();
+
+#[derive(PackedStruct, Clone, Debug)]
 #[packed_struct(endian="lsb")]
-struct ShopReading {
+struct EnvReading {
     #[packed_field()]
     aq_pm2_5: u16,
     #[packed_field()]
@@ -50,6 +55,16 @@ struct ShopReading {
     #[packed_field()]
     temperature: u16,
 }
+
+impl Into<String<64>> for EnvReading {
+    fn into(self) -> String<64> {
+        let mut msg: String<64> = String::new();
+        core::write!(&mut msg, "Temp: {}F\nHumidity: {}%\nAQ PM 2.5: {}\nAQ PM 10: {}", self.temperature, self.humidity, self.aq_pm2_5, self.aq_pm10).unwrap();
+        msg
+    }
+}
+
+
 const READ_INTERVAL_SECONDS: u64 = 3;
 
 bind_interrupts!(struct Irqs {
@@ -76,7 +91,9 @@ async fn display(
     loop {
         match control.receive().await {
             Event::DisplayActivated => {
-                oled.draw("howdy!").await
+                let reading = LAST_ENV_READING.wait().await;
+                let msg: String<64> = reading.into();
+                oled.draw(&*msg).await
             }
             Event::DisplayDeactivated => {
                 oled.clear().await
@@ -114,12 +131,14 @@ async fn env_sensors(
         temp_humidity(i2c_bus)
     ).await {
         (Ok(aq), Ok(th)) => {
-            let reading = ShopReading {
+            let reading = EnvReading {
                 aq_pm2_5: aq.pm2_5.into(),
                 aq_pm10: aq.pm10.into(),
                 humidity: th.humidity.into(),
                 temperature: th.temperature.into(),
             };
+            LAST_ENV_READING.signal(reading.clone());
+
             let payload: [u8; 8] = reading.pack().unwrap();
             radio_tx(radio, &payload).await;
             log::debug!("radio tx succeeded: {:?}", payload)

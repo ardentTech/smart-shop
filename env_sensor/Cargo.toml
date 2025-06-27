@@ -14,6 +14,7 @@ embassy-rp = { workspace = true, features = ["unstable-pac", "time-driver", "cri
 embassy-sync = { workspace = true }
 embassy-time = { workspace = true }
 embassy-usb-logger = { workspace = true }
+heapless = { workspace = true }
 lora_radio = { workspace = true }
 log = { workspace = true }
 packed_struct = { workspace = true, default-features = false }

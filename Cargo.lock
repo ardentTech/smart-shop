@@ -754,6 +754,7 @@ dependencies = [
  "embassy-sync",
  "embassy-time",
  "embassy-usb-logger",
+ "heapless",
  "log",
  "lora_radio",
  "packed_struct",
