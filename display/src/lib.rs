@@ -52,7 +52,7 @@ impl<I2C: I2c> Display<I2C> {
 
     pub async fn draw(&mut self, msg: &str) {
         self.display.clear();
-        Text::with_baseline(msg, Point::new(0, 2), self.text_style, Baseline::Top)
+        Text::with_baseline(msg, Point::new(0, 0), self.text_style, Baseline::Top)
             .draw(&mut self.display)
             .unwrap();
         self.display.flush().await.unwrap();
