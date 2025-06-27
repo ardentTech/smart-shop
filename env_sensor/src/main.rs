@@ -60,10 +60,11 @@ impl Into<String<64>> for EnvReading {
 
     fn into(self) -> String<64> {
         let mut msg: String<64> = String::new();
-        // TODO move these conversions into sht30 module
-        let temp_f = (((self.temperature as f32 * 315.0) / 65535.0) - 49.0) as u16;
-        let hum_rel = ((self.humidity as f32 * 100.0) / 65535.0) as u16;
-        core::write!(&mut msg, "Temp   = {}F\nRH     = {}%\nPM 2.5 = {}\nPM 10  = {}", temp_f, hum_rel, self.aq_pm2_5, self.aq_pm10).unwrap();
+        core::write!(
+            &mut msg,
+            "Temp   = {}F\nRH     = {}%\nPM 2.5 = {}\nPM 10  = {}",
+            self.temperature, self.humidity, self.aq_pm2_5, self.aq_pm10
+        ).unwrap();
         msg
     }
 }
@@ -139,7 +140,7 @@ async fn env_sensors(
                 aq_pm2_5: aq.pm2_5.into(),
                 aq_pm10: aq.pm10.into(),
                 humidity: th.humidity.into(),
-                temperature: th.temperature.into(),
+                temperature: th.temperature_f.into(),
             };
             LAST_ENV_READING.signal(reading.clone());
 

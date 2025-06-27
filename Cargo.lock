@@ -1560,6 +1560,7 @@ dependencies = [
  "crc",
  "embedded-hal-async",
  "embedded-hal-mock",
+ "log",
  "tokio",
 ]
 

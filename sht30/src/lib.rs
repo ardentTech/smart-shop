@@ -2,7 +2,6 @@
 
 use crc::{Crc, CRC_8_NRSC_5};
 use embedded_hal_async::i2c::{I2c, SevenBitAddress};
-
 // inspiration: https://gitlab.com/ghislainmary/embedded-sht3x
 // reasoning: i want a impl that is async-first and without default unit conversions
 
@@ -19,12 +18,12 @@ pub enum Sht30Error<E> {
 #[derive(Debug)]
 pub struct Sht30Reading {
     pub humidity: u16,
-    pub temperature: u16,
+    pub temperature_f: u16,
 }
 
 impl Sht30Reading {
     pub fn new(humidity: u16, temperature: u16) -> Self {
-        Self { humidity, temperature }
+        Self { humidity, temperature_f: temperature }
     }
 }
 
@@ -75,8 +74,8 @@ impl<I2C: I2c> Sht30<I2C> {
         let humidity_crc = data[5];
         Self::check_crc(temperature, temperature_crc)?;
         Self::check_crc(humidity, humidity_crc)?;
-        let temperature = Self::join_u16(temperature);
-        let humidity = Self::join_u16(humidity);
+        let temperature = (((Self::join_u16(temperature) as f32 * 315.0) / 65535.0) - 49.0) as u16;
+        let humidity = ((Self::join_u16(humidity) as f32 * 100.0) / 65535.0) as u16;
 
         let reading = Sht30Reading::new(humidity, temperature);
         Ok(reading)
@@ -111,6 +110,23 @@ mod tests {
         match sht30.read().await {
             Err(e) => assert_eq!(e, Sht30Error::InvalidCrc),
             _ => panic!("expected an error")
+        };
+        i2c.done();
+    }
+
+    #[tokio::test]
+    async fn read_ok() {
+        let expectations = [
+            I2cTransaction::write_read(SHT30_ADDRESS, READ_CMD.to_vec(), [0x5f, 0x58, 0x38, 0x7b, 0xb2, 0x7d].to_vec(),)
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut sht30 = Sht30::new(&mut i2c);
+        match sht30.read().await {
+            Ok(reading) => {
+                assert_eq!(reading.humidity, 48);
+                assert_eq!(reading.temperature_f, 68);
+            },
+            Err(e) => panic!("unexpected error: {:?}", e)
         };
         i2c.done();
     }
