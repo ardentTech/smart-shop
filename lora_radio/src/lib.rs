@@ -51,8 +51,13 @@ impl LoraRadio {
         LoraRadio { lora, mod_params, packet_params }
     }
 
-    pub async fn tx(&mut self, buffer: &[u8]) -> Result<(), RadioError> {
+    async fn tx(&mut self, buffer: &[u8]) -> Result<(), RadioError> {
         self.lora.prepare_for_tx(&self.mod_params, &mut self.packet_params, OUTPUT_POWER, buffer).await?;
         self.lora.tx().await
     }
+}
+
+pub async fn radio_tx(radio: &'static Mutex<NoopRawMutex, LoraRadio>, data: &[u8]) -> Result<(), RadioError> {
+    let mut radio = radio.lock().await;
+    radio.tx(data).await
 }

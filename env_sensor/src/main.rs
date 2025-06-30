@@ -27,7 +27,7 @@ use panic_halt as _;
 use static_cell::StaticCell;
 use air_quality::{AQSensor, AirQualityError, AirQualityReading};
 use display::Display;
-use lora_radio::LoraRadio;
+use lora_radio::{radio_tx, LoraRadio};
 use sht30::{Sht30, Sht30Error, Sht30Reading};
 use crate::board::Board;
 
@@ -145,18 +145,14 @@ async fn env_sensors(
             LAST_ENV_READING.signal(reading.clone());
 
             let payload: [u8; 8] = reading.pack().unwrap();
-            radio_tx(radio, &payload).await;
-            log::debug!("radio tx succeeded: {:?}", payload)
+            match radio_tx(radio, &payload).await {
+                Ok(_) => log::debug!("radio tx succeeded: {:?}", payload),
+                Err(e) => log::error!("radio tx failed: {:?}", e),
+            }
         },
         // nop bc each sensor is responsible for logging its errors
         _ => {}
     }
-}
-
-// TODO should this return a result as well?
-async fn radio_tx(radio: &'static LoRaRadio, data: &[u8]) {
-    let mut radio = radio.lock().await;
-    radio.tx(data).await.unwrap();
 }
 
 async fn temp_humidity(
